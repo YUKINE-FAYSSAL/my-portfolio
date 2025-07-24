@@ -10,8 +10,8 @@ from werkzeug.utils import secure_filename
 from functools import wraps
 import smtplib
 from email.mime.text import MIMEText
-from datetime import datetime, timezone  
-
+from datetime import datetime, timedelta, timezone
+import json
 
 
 # ========== INITIALIZATION ========== #
@@ -67,8 +67,9 @@ if collections['settings'].count_documents({}) == 0:
 def generate_token(user_id):
     return jwt.encode({
         'user_id': str(user_id),
-        'exp': datetime.datetime.utcnow() + datetime(days=7)
+        'exp': datetime.utcnow() + timedelta(days=7)  # Fixed this line
     }, SECRET_KEY, algorithm='HS256')
+
 
 def token_required(roles=None):
     def decorator(f):
@@ -636,7 +637,7 @@ def get_project(current_user, id):
             return jsonify({'message': 'Invalid project ID format'}), 400
             
         obj_id = ObjectId(id)
-        experience = collections['experience'].find_one({'_id': obj_id})
+        project = collections['projects'].find_one({'_id': obj_id})
         
         if not project:
             return jsonify({'message': 'Project not found'}), 404
@@ -744,16 +745,8 @@ def delete_project(current_user, id):
 def get_public_projects():
     """Get public projects (no auth required)"""
     try:
-        # Add filtering by status and featured
-        status = request.args.get('status', 'active')
-        featured = request.args.get('featured', None)
-        
-        query = {'status': status}
-        if featured is not None:
-            query['featured'] = featured.lower() == 'true'
-            
         projects = list(collections['projects'].find(
-            query,
+            {'status': 'active'},
             {
                 '_id': 1,
                 'title': 1,
@@ -765,6 +758,12 @@ def get_public_projects():
                 'featured': 1
             }
         ).sort('created_at', -1))
+        
+        # Convert image URLs to full URLs
+        for project in projects:
+            project['_id'] = str(project['_id'])
+            if project.get('image_url'):
+                project['image_url'] = f'http://localhost:5000{project["image_url"]}'
         
         return json_util.dumps(projects)
     except Exception as e:
@@ -1257,45 +1256,480 @@ def get_public_experience(id):
         return jsonify({'message': f'Error fetching experience: {str(e)}'}), 500
 
 
-# ===== CERTIFICATES =====
+# Helper functions (add these to your app)
+def allowed_file(filename):
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+def ensure_upload_dir():
+    """Create upload directory if it doesn't exist"""
+    if not os.path.exists(UPLOAD_FOLDER):
+        os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+
+# ===== CERTIFICATES ROUTES =====
 @app.route('/api/certificates', methods=['GET', 'POST'])
 @token_required(roles=['admin'])
 def certificates(current_user):
     if request.method == 'GET':
-        certificates = list(collections['certificates'].find({}))
-        return json_util.dumps(certificates)
+        try:
+            # Get query parameters for filtering and sorting
+            category = request.args.get('category')
+            status = request.args.get('status')
+            level = request.args.get('level')
+            priority = request.args.get('priority')
+            search = request.args.get('search')
+            sort_by = request.args.get('sort', 'issueDate')
+            sort_order = request.args.get('order', 'desc')
+            
+            # Build query
+            query = {}
+            if category and category != 'all':
+                query['category'] = category
+            if status and status != 'all':
+                query['status'] = status
+            if level and level != 'all':
+                query['level'] = level
+            if priority and priority != 'all':
+                query['priority'] = priority
+            if search:
+                query['$or'] = [
+                    {'name': {'$regex': search, '$options': 'i'}},
+                    {'issuer': {'$regex': search, '$options': 'i'}},
+                    {'description': {'$regex': search, '$options': 'i'}},
+                    {'skills': {'$elemMatch': {'$regex': search, '$options': 'i'}}}
+                ]
+            
+            # Set sort direction
+            sort_direction = -1 if sort_order == 'desc' else 1
+            
+            # Execute query
+            certificates = list(collections['certificates'].find(query).sort(sort_by, sort_direction))
+            
+            # Add computed fields
+            for cert in certificates:
+                # Check if expiring soon (within 30 days)
+                if cert.get('expiryDate'):
+                    expiry_date = cert['expiryDate']
+                    if isinstance(expiry_date, str):
+                        try:
+                            expiry_date = datetime.fromisoformat(expiry_date.replace('Z', '+00:00'))
+                        except:
+                            expiry_date = datetime.strptime(expiry_date[:10], '%Y-%m-%d')
+                    days_until_expiry = (expiry_date - datetime.now()).days
+                    cert['isExpiringSoon'] = 0 < days_until_expiry <= 30
+                    cert['daysUntilExpiry'] = days_until_expiry
+                else:
+                    cert['isExpiringSoon'] = False
+                    cert['daysUntilExpiry'] = None
+                
+                # Add skill count
+                cert['skillCount'] = len(cert.get('skills', []))
+            
+            return json_util.dumps(certificates), 200
+            
+        except Exception as e:
+            print(f"Error fetching certificates: {str(e)}")
+            return jsonify({'message': f'Failed to fetch certificates: {str(e)}'}), 500
+    
     elif request.method == 'POST':
-        data = request.json
-        data['created_by'] = str(current_user['_id'])
-        data['created_at'] = datetime.datetime.utcnow()
-        result = collections['certificates'].insert_one(data)
-        return jsonify({'id': str(result.inserted_id)}), 201
+        try:
+            ensure_upload_dir()
+            
+            # Get form data
+            data = {
+                'name': request.form.get('name', '').strip(),
+                'issuer': request.form.get('issuer', '').strip(),
+                'issueDate': request.form.get('issueDate'),
+                'expiryDate': request.form.get('expiryDate') or None,
+                'credentialId': request.form.get('credentialId', '').strip(),
+                'credentialUrl': request.form.get('credentialUrl', '').strip(),
+                'category': request.form.get('category', 'Cloud Computing'),
+                'status': request.form.get('status', 'Active'),
+                'description': request.form.get('description', '').strip(),
+                'level': request.form.get('level', 'Professional'),
+                'icon': request.form.get('icon', '').strip(),
+                'priority': request.form.get('priority', 'Medium')
+            }
+            
+            # Parse skills array
+            skills_json = request.form.get('skills', '[]')
+            try:
+                data['skills'] = json.loads(skills_json) if skills_json else []
+            except Exception as e:
+                print(f"Error parsing skills: {e}")
+                data['skills'] = []
+            
+            # Validate required fields
+            if not data['name'] or not data['issuer']:
+                return jsonify({'message': 'Name and issuer are required'}), 400
+            
+            # Convert date strings to datetime objects
+            if data['issueDate']:
+                try:
+                    data['issueDate'] = datetime.fromisoformat(data['issueDate'])
+                except ValueError:
+                    return jsonify({'message': 'Invalid issue date format'}), 400
+            
+            if data['expiryDate']:
+                try:
+                    data['expiryDate'] = datetime.fromisoformat(data['expiryDate'])
+                except ValueError:
+                    return jsonify({'message': 'Invalid expiry date format'}), 400
+            
+            # Handle file upload - FIXED PATH
+            if 'image' in request.files:
+                file = request.files['image']
+                if file and file.filename != '' and allowed_file(file.filename):
+                    filename = secure_filename(file.filename)
+                    # Add timestamp to avoid conflicts
+                    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S_')
+                    filename = timestamp + filename
+                    filepath = os.path.join(UPLOAD_FOLDER, filename)
+                    file.save(filepath)
+                    # FIXED: Consistent field name and path
+                    data['imageUrl'] = f'/uploads/{filename}'
+            
+            # Add metadata
+            data['created_by'] = str(current_user['_id'])
+            data['created_at'] = datetime.utcnow()
+            data['updated_at'] = datetime.utcnow()
+            
+            # Insert certificate
+            result = collections['certificates'].insert_one(data)
+            
+            return jsonify({
+                'message': 'Certificate added successfully',
+                'id': str(result.inserted_id)
+            }), 201
+            
+        except Exception as e:
+            print(f"Error adding certificate: {str(e)}")
+            return jsonify({'message': f'Failed to add certificate: {str(e)}'}), 500
 
 @app.route('/api/certificates/<id>', methods=['GET', 'PUT', 'DELETE'])
 @token_required(roles=['admin'])
 def certificate(current_user, id):
+    try:
+        certificate_id = ObjectId(id)
+    except Exception as e:
+        return jsonify({'message': 'Invalid certificate ID'}), 400
+    
     if request.method == 'GET':
-        certificate = collections['certificates'].find_one({'_id': ObjectId(id)})
-        if not certificate:
-            return jsonify({'message': 'Certificate not found'}), 404
-        return json_util.dumps(certificate)
+        try:
+            certificate = collections['certificates'].find_one({'_id': certificate_id})
+            if not certificate:
+                return jsonify({'message': 'Certificate not found'}), 404
+            
+            # Add computed fields
+            if certificate.get('expiryDate'):
+                expiry_date = certificate['expiryDate']
+                if isinstance(expiry_date, str):
+                    try:
+                        expiry_date = datetime.fromisoformat(expiry_date.replace('Z', '+00:00'))
+                    except:
+                        expiry_date = datetime.strptime(expiry_date[:10], '%Y-%m-%d')
+                days_until_expiry = (expiry_date - datetime.now()).days
+                certificate['isExpiringSoon'] = 0 < days_until_expiry <= 30
+                certificate['daysUntilExpiry'] = days_until_expiry
+            else:
+                certificate['isExpiringSoon'] = False
+                certificate['daysUntilExpiry'] = None
+            
+            return json_util.dumps(certificate), 200
+            
+        except Exception as e:
+            print(f"Error fetching certificate: {str(e)}")
+            return jsonify({'message': f'Failed to fetch certificate: {str(e)}'}), 500
+    
     elif request.method == 'PUT':
-        data = request.json
-        result = collections['certificates'].update_one(
-            {'_id': ObjectId(id)},
-            {'$set': data}
-        )
-        if result.modified_count == 0:
-            return jsonify({'message': 'No changes made'}), 400
-        return jsonify({'message': 'Certificate updated successfully'})
+        try:
+            ensure_upload_dir()
+            
+            # Get form data
+            data = {
+                'name': request.form.get('name', '').strip(),
+                'issuer': request.form.get('issuer', '').strip(),
+                'issueDate': request.form.get('issueDate'),
+                'expiryDate': request.form.get('expiryDate') or None,
+                'credentialId': request.form.get('credentialId', '').strip(),
+                'credentialUrl': request.form.get('credentialUrl', '').strip(),
+                'category': request.form.get('category', 'Cloud Computing'),
+                'status': request.form.get('status', 'Active'),
+                'description': request.form.get('description', '').strip(),
+                'level': request.form.get('level', 'Professional'),
+                'icon': request.form.get('icon', '').strip(),
+                'priority': request.form.get('priority', 'Medium')
+            }
+            
+            # Parse skills array
+            skills_json = request.form.get('skills', '[]')
+            try:
+                data['skills'] = json.loads(skills_json) if skills_json else []
+            except Exception as e:
+                print(f"Error parsing skills: {e}")
+                data['skills'] = []
+            
+            # Validate required fields
+            if not data['name'] or not data['issuer']:
+                return jsonify({'message': 'Name and issuer are required'}), 400
+            
+            # Convert date strings to datetime objects
+            if data['issueDate']:
+                try:
+                    data['issueDate'] = datetime.fromisoformat(data['issueDate'])
+                except ValueError:
+                    return jsonify({'message': 'Invalid issue date format'}), 400
+            
+            if data['expiryDate']:
+                try:
+                    data['expiryDate'] = datetime.fromisoformat(data['expiryDate'])
+                except ValueError:
+                    return jsonify({'message': 'Invalid expiry date format'}), 400
+            
+            # Handle file upload
+            if 'image' in request.files:
+                file = request.files['image']
+                if file and file.filename != '' and allowed_file(file.filename):
+                    # Delete old image if exists
+                    old_cert = collections['certificates'].find_one({'_id': certificate_id})
+                    if old_cert and old_cert.get('imageUrl'):
+                        old_filepath = old_cert['imageUrl'].replace('/uploads/', 'uploads/')
+                        if os.path.exists(old_filepath):
+                            try:
+                                os.remove(old_filepath)
+                            except:
+                                pass  # Continue even if file deletion fails
+                    
+                    # Save new image
+                    filename = secure_filename(file.filename)
+                    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S_')
+                    filename = timestamp + filename
+                    filepath = os.path.join(UPLOAD_FOLDER, filename)
+                    file.save(filepath)
+                    data['imageUrl'] = f'/uploads/certificates/{filename}'
+            
+            # Add update metadata
+            data['updated_at'] = datetime.utcnow()
+            data['updated_by'] = str(current_user['_id'])
+            
+            # Update certificate
+            result = collections['certificates'].update_one(
+                {'_id': certificate_id},
+                {'$set': data}
+            )
+            
+            if result.matched_count == 0:
+                return jsonify({'message': 'Certificate not found'}), 404
+            
+            return jsonify({'message': 'Certificate updated successfully'}), 200
+            
+        except Exception as e:
+            print(f"Error updating certificate: {str(e)}")
+            return jsonify({'message': f'Failed to update certificate: {str(e)}'}), 500
+    
     elif request.method == 'DELETE':
-        result = collections['certificates'].delete_one({'_id': ObjectId(id)})
-        if result.deleted_count == 0:
-            return jsonify({'message': 'Certificate not found'}), 404
-        return jsonify({'message': 'Certificate deleted successfully'})
+        try:
+            # Get certificate to delete associated image
+            certificate = collections['certificates'].find_one({'_id': certificate_id})
+            if not certificate:
+                return jsonify({'message': 'Certificate not found'}), 404
+            
+            # Delete associated image file
+            if certificate.get('imageUrl'):
+                filepath = certificate['imageUrl'].replace('/uploads/', 'uploads/')
+                if os.path.exists(filepath):
+                    try:
+                        os.remove(filepath)
+                    except:
+                        pass  # Continue even if file deletion fails
+            
+            # Delete certificate
+            result = collections['certificates'].delete_one({'_id': certificate_id})
+            
+            if result.deleted_count == 0:
+                return jsonify({'message': 'Certificate not found'}), 404
+            
+            return jsonify({'message': 'Certificate deleted successfully'}), 200
+            
+        except Exception as e:
+            print(f"Error deleting certificate: {str(e)}")
+            return jsonify({'message': f'Failed to delete certificate: {str(e)}'}), 500
+
+# ===== SERVE UPLOADED FILES =====
+@app.route('/uploads/certificates/<filename>')
+def uploaded_certificate(filename):
+    """Serve uploaded certificate images"""
+    try:
+        return send_from_directory(UPLOAD_FOLDER, filename)
+    except Exception as e:
+        return jsonify({'message': 'File not found'}), 404
+
+# ===== CERTIFICATE STATISTICS =====
+@app.route('/api/certificates/stats', methods=['GET'])
+@token_required(roles=['admin'])
+def certificate_stats(current_user):
+    try:
+        # Basic statistics
+        total = collections['certificates'].count_documents({})
+        active = collections['certificates'].count_documents({'status': 'Active'})
+        expired = collections['certificates'].count_documents({'status': 'Expired'})
+        pending = collections['certificates'].count_documents({'status': 'Pending'})
+        
+        # Calculate expiring soon (within 30 days)
+        thirty_days_from_now = datetime.datetime.now() + datetime.timedelta(days=30)
+        expiring_soon = collections['certificates'].count_documents({
+            'expiryDate': {
+                '$gte': datetime.datetime.now(),
+                '$lte': thirty_days_from_now
+            },
+            'status': 'Active'
+        })
+        
+        result = {
+            'total': total,
+            'active': active,
+            'expired': expired,
+            'pending': pending,
+            'expiringSoon': expiring_soon
+        }
+        
+        # Category breakdown
+        try:
+            category_pipeline = [
+                {'$group': {'_id': '$category', 'count': {'$sum': 1}}},
+                {'$sort': {'count': -1}}
+            ]
+            categories = list(collections['certificates'].aggregate(category_pipeline))
+            result['categories'] = categories
+        except:
+            result['categories'] = []
+        
+        # Level breakdown
+        try:
+            level_pipeline = [
+                {'$group': {'_id': '$level', 'count': {'$sum': 1}}},
+                {'$sort': {'count': -1}}
+            ]
+            levels = list(collections['certificates'].aggregate(level_pipeline))
+            result['levels'] = levels
+        except:
+            result['levels'] = []
+        
+        return jsonify(result), 200
+        
+    except Exception as e:
+        print(f"Error getting certificate stats: {str(e)}")
+        return jsonify({'message': f'Failed to get statistics: {str(e)}'}), 500 
+
+
+# ========== PUBLIC ❤️ ========== #
+
+# ===== PUBLIC SKILLS =====
+@app.route('/api/public/skills', methods=['GET'])
+def get_public_skills():
+    try:
+        skills = list(collections['skills'].find({}, {
+            '_id': 1,
+            'name': 1,
+            'level': 1,
+            'category': 1,
+            'icon': 1,
+            'description': 1,
+            'years': 1,
+            'imageUrl': 1  # Changed from image_url to imageUrl
+        }))
+        return json_util.dumps(skills)
+    except Exception as e:
+        return jsonify({'message': str(e)}), 500
+
+# ===== PUBLIC CERTIFICATES =====
+@app.route('/api/public/certificates', methods=['GET'])
+def get_public_certificates():
+    try:
+        # Get all certificates with all fields needed for display
+        certificates = list(collections['certificates'].find({}, {
+            '_id': 1,
+            'name': 1,
+            'issuer': 1,
+            'issueDate': 1,  # Fixed field name
+            'expiryDate': 1, # Fixed field name
+            'credentialId': 1,
+            'credentialUrl': 1,
+            'category': 1,
+            'status': 1,
+            'description': 1,
+            'level': 1,
+            'icon': 1,
+            'priority': 1,
+            'skills': 1,
+            'imageUrl': 1,  # FIXED: Consistent field name
+            'image_url': 1, # Also include alternative field name for backward compatibility
+            'image': 1      # Also include for backward compatibility
+        }))
+        
+        # Process certificates to ensure consistent field names
+        for cert in certificates:
+            # Normalize image field names
+            if not cert.get('imageUrl'):
+                if cert.get('image_url'):
+                    cert['imageUrl'] = cert['image_url']
+                elif cert.get('image'):
+                    cert['imageUrl'] = cert['image']
+        
+        return json_util.dumps(certificates)
+    except Exception as e:
+        print(f"Error fetching public certificates: {str(e)}")
+        return jsonify({'message': str(e)}), 500
 
 
 
+
+
+# Add this to your app.py in the PUBLIC section
+@app.route('/api/public/projects/<id>', methods=['GET'])
+def get_public_project(id):
+    """Get public project details (no auth required)"""
+    try:
+        if not ObjectId.is_valid(id):
+            return jsonify({'message': 'Invalid project ID format'}), 400
+            
+        obj_id = ObjectId(id)
+        project = collections['projects'].find_one({'_id': obj_id})
+        
+        if not project:
+            return jsonify({'message': 'Project not found'}), 404
+            
+        # Convert ObjectId to string
+        project['_id'] = str(project['_id'])
+        if project.get('created_by'):
+            project['created_by'] = str(project['created_by'])
+            
+        # Ensure image URL is complete if it exists
+        if project.get('image_url'):
+            project['image_url'] = f'http://localhost:5000{project["image_url"]}'
+            
+        return json_util.dumps(project)
+        
+    except Exception as e:
+        return jsonify({'message': f'Error fetching project: {str(e)}'}), 500
+# ===== SERVE UPLOADED FILES - FIXED =====
+@app.route('/uploads/<filename>')
+def serve_uploaded_file(filename):
+    """Serve uploaded files"""
+    try:
+        return send_from_directory(UPLOAD_FOLDER, filename)
+    except Exception as e:
+        print(f"Error serving file {filename}: {str(e)}")
+        return jsonify({'message': 'File not found'}), 404
+
+# Make sure upload directory exists
+def ensure_upload_dir():
+    """Create upload directory if it doesn't exist"""
+    if not os.path.exists(UPLOAD_FOLDER):
+        os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+        print(f"Created upload directory: {UPLOAD_FOLDER}")
+
+# Call this on startup
+ensure_upload_dir()
 # ========== FILE UPLOAD ========== #
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
@@ -1369,7 +1803,7 @@ def public_portfolio():
         'projects': list(collections['projects'].find({}, {'_id': 1, 'title': 1, 'description': 1, 'image_url': 1})),
         'education': list(collections['education'].find({}, {'_id': 1, 'degree': 1, 'institution': 1, 'year': 1})),
         'experience': list(collections['experience'].find({}, {'_id': 1, 'position': 1, 'company': 1, 'duration': 1})),
-        'certificates': list(collections['certificates'].find({}, {'_id': 1, 'name': 1, 'issuer': 1, 'date': 1})),
+        'certificates': list(collections['certificates'].find({}, {'_id': 1, 'name': 1, 'issuer': 1, 'date': 1})),  # Added
         'blog': list(collections['blog'].find({}, {'_id': 1, 'title': 1, 'excerpt': 1, 'date': 1, 'slug': 1}))
     }
     return json_util.dumps(portfolio)

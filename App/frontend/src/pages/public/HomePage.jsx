@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import axios from 'axios';
 import AnimatedSection from '../../components/ui/AnimatedSection';
 import { useTheme } from '../../contexts/ThemeContext';
-import { FaCode, FaPaintBrush, FaMobileAlt } from 'react-icons/fa';
+import { FaCode, FaPaintBrush, FaMobileAlt, FaRocket, FaBrain, FaServer } from 'react-icons/fa';
 import AiBotLoader from '../../components/ui/loading/AiBotLoader';
 import useScrollToTop from '../../hooks/useScrollToTop';
 import ThreeBackground from '../../components/ui/home/ThreeBackground';
@@ -23,29 +23,27 @@ const HomePage = () => {
     const loadProjects = async () => {
       try {
         const response = await axios.get('http://localhost:5000/api/public/projects');
-        const data = response.data; // Axios automatically parses JSON
+        const data = response.data;
         if (!Array.isArray(data)) {
-          throw new Error('Expected an array of projects, received: ' + JSON.stringify(data));
+          throw new Error('Expected an array of projects');
         }
-        setProjects(data.slice(0, 2));
+        const normalizedProjects = data.map(project => ({
+          ...project,
+          imageUrl: project.image_url || project.imageUrl
+        }));
+        setProjects(normalizedProjects.slice(0, 2));
       } catch (error) {
-        console.error('Error loading projects:', error.message, error.response?.data || error);
-        setError(`Failed to load projects: ${error.message}. Please ensure the server is running and try again.`);
+        console.error('Error loading projects:', error.message);
+        setError(`Failed to load projects: ${error.message}. Please ensure the server is running.`);
       } finally {
         setLoading(false);
-        if (window.ScrollTrigger) {
-          ScrollTrigger.refresh();
-        }
+        ScrollTrigger.refresh();
       }
     };
     loadProjects();
   }, []);
 
-  // ScrollTrigger animations for sections
   useEffect(() => {
-    const contentElement = document.querySelector('.content');
-    if (!contentElement) return;
-
     const animateTextElements = () => {
       const titles = document.querySelectorAll('.title');
       const descriptions = document.querySelectorAll('.description');
@@ -83,6 +81,21 @@ const HomePage = () => {
       description: 'Developing cross-platform mobile applications with React Native.',
       icon: <FaMobileAlt className="text-green-500 w-10 h-10" />,
     },
+    {
+      title: 'API Development',
+      description: 'Robust RESTful and GraphQL APIs with proper documentation and security.',
+      icon: <FaServer className="text-purple-500 w-10 h-10" />,
+    },
+    {
+      title: 'Performance Optimization',
+      description: 'Making your applications blazing fast with modern optimization techniques.',
+      icon: <FaRocket className="text-yellow-500 w-10 h-10" />,
+    },
+    {
+      title: 'AI Integration',
+      description: 'Implementing machine learning models and AI features into your applications.',
+      icon: <FaBrain className="text-cyan-500 w-10 h-10" />,
+    },
   ];
 
   if (loading) {
@@ -105,7 +118,6 @@ const HomePage = () => {
     <div className="min-h-screen">
       <ThreeBackground />
       <div className="content">
-        {/* Hero Section */}
         <div className="relative bg-black text-white font-['Space_Grotesk'] overflow-hidden">
           <div
             className="absolute inset-0 z-0"
@@ -115,25 +127,9 @@ const HomePage = () => {
               backgroundPosition: 'center',
               backgroundRepeat: 'no-repeat',
               filter: theme === 'dark' ? 'brightness(0.4)' : 'brightness(0.95)',
-              opacity: 0.3,
+              opacity: 1,
             }}
           />
-
-          <div className="fixed inset-0 overflow-hidden pointer-events-none z-0">
-            <div className="absolute top-20 left-10 w-96 h-96 bg-indigo-900/30 rounded-full blur-3xl"></div>
-            <div className="absolute bottom-10 right-10 w-80 h-80 bg-purple-900/30 rounded-full blur-3xl"></div>
-            <div className="absolute top-40 right-20 w-64 h-64 bg-cyan-900/30 rounded-full blur-3xl"></div>
-            <div className="absolute inset-0 grid grid-cols-12 opacity-15 pointer-events-none">
-              {Array.from({ length: 12 }).map((_, i) => (
-                <div key={i} className="border-r border-cyan-500"></div>
-              ))}
-            </div>
-            <div className="absolute inset-0 grid grid-rows-12 opacity-15 pointer-events-none">
-              {Array.from({ length: 12 }).map((_, i) => (
-                <div key={i} className="border-b border-cyan-500"></div>
-              ))}
-            </div>
-          </div>
 
           <section className="section relative pt-32 pb-20 px-4 h-screen flex items-center z-10">
             <div className="max-w-6xl mx-auto text-center">
@@ -145,11 +141,17 @@ const HomePage = () => {
 
               <AnimatedSection delay={200}>
                 <h2 className="description text-xl md:text-2xl text-gray-300 mb-8">
-                  Full Stack Developer
+                  Full Stack Developer & Digital Craftsman
                 </h2>
               </AnimatedSection>
 
               <AnimatedSection delay={300}>
+                <p className="description text-lg md:text-xl text-gray-400 mb-12 max-w-3xl mx-auto">
+                  I build exceptional digital experiences that are fast, accessible, and visually stunning.
+                </p>
+              </AnimatedSection>
+
+              <AnimatedSection delay={400}>
                 <div className="flex justify-center gap-4 mb-16 flex-wrap">
                   <Link to="/portfolio" className="relative group">
                     <div className="absolute -inset-0.5 bg-gradient-to-r from-indigo-600/50 to-purple-600/50 rounded-lg blur opacity-75 group-hover:opacity-100 transition-all duration-500"></div>
@@ -168,39 +170,9 @@ const HomePage = () => {
                 </div>
               </AnimatedSection>
             </div>
-
-            <div className="absolute bottom-10 left-1/2 transform -translate-x-1/2 animate-bounce z-10">
-              <svg className="w-6 h-6 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 14l-7 7m0 0l-7-7m7 7V3" />
-              </svg>
-            </div>
           </section>
         </div>
 
-        {/* Services Section */}
-        <section className={`section py-16 px-4 ${theme === 'dark' ? 'bg-gray-800' : 'bg-white'}`}>
-          <div className="max-w-6xl mx-auto">
-            <AnimatedSection>
-              <h2 className="title text-3xl font-bold mb-12 text-center">
-                <span className={`${theme === 'dark' ? 'text-indigo-400' : 'text-indigo-600'}`}>My Services</span>
-              </h2>
-            </AnimatedSection>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-              {services.map((service, index) => (
-                <AnimatedSection key={index} delay={index * 100}>
-                  <div className={`p-6 rounded-xl border ${theme === 'dark' ? 'border-gray-700 bg-gray-900' : 'border-gray-200 bg-gray-50'} hover:shadow-lg transition-all`}>
-                    <div className="text-4xl mb-4">{service.icon}</div>
-                    <h3 className="text-xl font-bold mb-3">{service.title}</h3>
-                    <p className={`description ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>{service.description}</p>
-                  </div>
-                </AnimatedSection>
-              ))}
-            </div>
-          </div>
-        </section>
-
-        {/* Recent Projects */}
         <section className={`section py-16 px-4 ${theme === 'dark' ? 'bg-gray-900' : 'bg-indigo-50'}`}>
           <div className="max-w-6xl mx-auto">
             <AnimatedSection>
@@ -212,23 +184,39 @@ const HomePage = () => {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
               {projects.map((project, index) => (
                 <AnimatedSection key={index} delay={index * 100}>
-                  <div className={`p-6 rounded-xl border ${theme === 'dark' ? 'border-gray-700 bg-gray-800' : 'border-gray-200 bg-white'} hover:shadow-lg transition-all`}>
-                    <h3 className="text-xl font-bold mb-3">{project.title}</h3>
-                    <p className={`description mb-4 ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
+                  <div className={`relative p-6 rounded-xl border transition-all duration-300 group ${theme === 'dark' ? 'border-gray-700 bg-gray-800' : 'border-gray-200 bg-white'} hover:shadow-lg hover:-translate-y-2 hover:scale-105`}>
+                    <div className="relative h-48 w-full overflow-hidden rounded-t-xl">
+                      <img
+                        src={project.image_url || project.imageUrl || 'https://via.placeholder.com/400x200'}
+                        alt={project.title}
+                        className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-110"
+                        onError={(e) => {
+                          e.target.onerror = null;
+                          e.target.src = `https://via.placeholder.com/400x200?text=${encodeURIComponent(project.title)}`;
+                        }}
+                      />
+                    </div>
+                    <h3 className={`text-xl font-bold mt-4 ${theme === 'dark' ? 'text-white' : 'text-gray-800'} transition-colors duration-300 group-hover:text-indigo-500`}>
+                      {project.title || 'Untitled Project'}
+                    </h3>
+                    <p className={`text-sm mb-3 ${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'} transition-colors duration-300 group-hover:text-indigo-400`}>
                       {project.description || 'No description available'}
                     </p>
                     {project.technologies && (
-                      <div className="flex flex-wrap gap-2">
+                      <div className="flex flex-wrap gap-2 mb-4">
                         {project.technologies.map((tag, i) => (
-                          <span
-                            key={i}
-                            className={`px-3 py-1 text-xs rounded-full ${theme === 'dark' ? 'bg-indigo-900 text-indigo-300' : 'bg-indigo-100 text-indigo-700'}`}
-                          >
+                          <span key={i} className={`px-2.5 py-1 text-xs rounded-full ${theme === 'dark' ? 'bg-indigo-900 text-indigo-300' : 'bg-indigo-100 text-indigo-700'}`}>
                             {tag}
                           </span>
                         ))}
                       </div>
                     )}
+                    <Link to={`/project/${project._id}`} className={`inline-flex items-center justify-center w-full px-4 py-2.5 text-sm font-medium rounded-lg transition-all duration-200 ${theme === 'dark' ? 'bg-indigo-600 text-white hover:bg-indigo-500' : 'bg-indigo-600 text-white hover:bg-indigo-700'} animate-glow`}>
+                      View Details
+                      <svg className="ml-2 w-4 h-4 transition-transform duration-200 group-hover:translate-x-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
+                      </svg>
+                    </Link>
                   </div>
                 </AnimatedSection>
               ))}
@@ -236,39 +224,72 @@ const HomePage = () => {
           </div>
         </section>
 
-        {/* About Me */}
         <section className={`section py-16 px-4 ${theme === 'dark' ? 'bg-gray-800' : 'bg-white'}`}>
           <div className="max-w-6xl mx-auto">
-            <div className={`p-8 rounded-xl border ${theme === 'dark' ? 'border-gray-700 bg-gray-900' : 'border-gray-200 bg-gray-50'}`}>
-              <AnimatedSection>
-                <h2 className="title text-3xl font-bold mb-6">
-                  <span className={`${theme === 'dark' ? 'text-indigo-400' : 'text-indigo-600'}`}>About Me</span>
-                </h2>
-              </AnimatedSection>
-              <AnimatedSection delay={100}>
-                <p className={`description mb-4 text-lg ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
-                  I'm a passionate full-stack developer currently studying at EMSI Rabat and trained at OFPPT Taza.
-                  I craft clean, responsive, and performant web apps using React, Node.js, and modern tech.
-                </p>
-              </AnimatedSection>
-              <AnimatedSection delay={200}>
-                <p className={`description ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'} mb-6`}>
-                  Outside of coding, I enjoy UI/UX design, contributing to open source, and exploring new technologies.
-                </p>
-              </AnimatedSection>
-              <AnimatedSection delay={300}>
-                <Link
-                  to="/portfolio"
-                  className={`inline-block px-6 py-2 rounded-full font-medium ${theme === 'dark' ? 'bg-indigo-600 hover:bg-indigo-700 text-white' : 'bg-indigo-600 hover:bg-indigo-700 text-white'}`}
-                >
-                  Learn More About My Work
-                </Link>
-              </AnimatedSection>
+            <AnimatedSection>
+              <h2 className="title text-3xl font-bold mb-6">
+                <span className={`${theme === 'dark' ? 'text-indigo-400' : 'text-indigo-600'}`}>My Expertise</span>
+              </h2>
+            </AnimatedSection>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 mt-12">
+              {services.map((service, index) => (
+                <AnimatedSection key={index} delay={index * 100}>
+                  <div className={`p-6 rounded-xl border transition-all duration-300 ${theme === 'dark' ? 'border-gray-700 bg-gray-700/30 hover:bg-gray-700/50' : 'border-gray-200 bg-indigo-50/50 hover:bg-indigo-100/50'} hover:shadow-lg hover:-translate-y-1`}>
+                    <div className="flex items-center mb-4">
+                      <div className="mr-4">
+                        {service.icon}
+                      </div>
+                      <h3 className={`text-xl font-bold ${theme === 'dark' ? 'text-white' : 'text-gray-800'}`}>
+                        {service.title}
+                      </h3>
+                    </div>
+                    <p className={`${theme === 'dark' ? 'text-gray-300' : 'text-gray-600'}`}>
+                      {service.description}
+                    </p>
+                  </div>
+                </AnimatedSection>
+              ))}
             </div>
           </div>
         </section>
 
-        {/* Floating Contact Button */}
+        <section className={`section py-16 px-4 ${theme === 'dark' ? 'bg-gray-900' : 'bg-indigo-50'}`}>
+          <div className="max-w-6xl mx-auto">
+            <AnimatedSection>
+              <h2 className="title text-3xl font-bold mb-6">
+                <span className={`${theme === 'dark' ? 'text-indigo-400' : 'text-indigo-600'}`}>About Me</span>
+              </h2>
+            </AnimatedSection>
+            <AnimatedSection delay={100}>
+              <p className={`description mb-4 text-lg ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
+                I'm a passionate full-stack developer currently studying at EMSI Rabat and trained at OFPPT Taza. With over 3 years of experience, I specialize in crafting clean, responsive, and performant web applications using modern technologies.
+              </p>
+            </AnimatedSection>
+            <AnimatedSection delay={200}>
+              <p className={`description ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'} mb-6`}>
+                My approach combines technical excellence with creative problem-solving. I believe in writing maintainable code, designing intuitive interfaces, and delivering solutions that exceed expectations.
+              </p>
+            </AnimatedSection>
+            <AnimatedSection delay={300}>
+              <div className="flex flex-wrap gap-4">
+                <Link
+                  to="/portfolio"
+                  className={`px-6 py-2 rounded-full font-medium ${theme === 'dark' ? 'bg-indigo-600 hover:bg-indigo-700 text-white' : 'bg-indigo-600 hover:bg-indigo-700 text-white'}`}
+                >
+                  View My Work
+                </Link>
+                <Link
+                  to="/contact"
+                  className={`px-6 py-2 rounded-full font-medium ${theme === 'dark' ? 'bg-transparent border border-indigo-500 hover:bg-indigo-900/30 text-indigo-400' : 'bg-transparent border border-indigo-600 hover:bg-indigo-100 text-indigo-700'}`}
+                >
+                  Get In Touch
+                </Link>
+              </div>
+            </AnimatedSection>
+          </div>
+        </section>
+
         <Link
           to="/contact"
           className={`fixed right-6 bottom-6 w-16 h-16 rounded-full flex items-center justify-center shadow-lg z-50 transition-all duration-300 hover:scale-110 ${theme === 'dark' ? 'bg-indigo-600 hover:bg-indigo-700' : 'bg-indigo-600 hover:bg-indigo-700'}`}

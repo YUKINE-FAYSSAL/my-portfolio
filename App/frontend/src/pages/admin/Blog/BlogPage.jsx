@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { fetchItems, deleteItem } from '../../../api/api';
 import { Link, useNavigate } from 'react-router-dom';
 import { useToast } from '../../../contexts/ToastContext';
 import { FiEdit2, FiTrash2, FiPlus, FiClock, FiCalendar } from 'react-icons/fi';
 import { useTheme } from '../../../contexts/ThemeContext';
+import { getBlogPosts, deleteBlogPost } from '../../../api/blogApi';
 
 const BlogPage = () => {
   const [posts, setPosts] = useState([]);
@@ -17,10 +17,10 @@ const BlogPage = () => {
   useEffect(() => {
     const loadPosts = async () => {
       try {
-        const { data } = await fetchItems('blog');
-        setPosts(data);
+        const posts = await getBlogPosts();
+        setPosts(posts);
       } catch (err) {
-        showToast('error', 'Failed to load blog posts');
+        showToast('error', err.message);
       } finally {
         setLoading(false);
       }
@@ -33,21 +33,17 @@ const BlogPage = () => {
     setShowDeleteModal(true);
   };
 
-const handleDeleteConfirm = async () => {
-  try {
-    const response = await deleteItem('blog', postToDelete._id);
-    if (response.ok) {
+  const handleDeleteConfirm = async () => {
+    try {
+      await deleteBlogPost(postToDelete._id);
       setPosts(posts.filter(post => post._id !== postToDelete._id));
       showToast('success', 'Post deleted successfully');
-    } else {
-      throw new Error('Failed to delete post');
+    } catch (err) {
+      showToast('error', err.message);
+    } finally {
+      setShowDeleteModal(false);
     }
-  } catch (err) {
-    showToast('error', err.message);
-  } finally {
-    setShowDeleteModal(false);
-  }
-};
+  };
 
   if (loading) {
     return (
@@ -59,7 +55,6 @@ const handleDeleteConfirm = async () => {
 
   return (
     <div className="container mx-auto px-4 py-8">
-      {/* Header with Add New button */}
       <div className="flex justify-between items-center mb-8">
         <h1 className="text-3xl font-bold text-gray-800 dark:text-white">Manage Blog Posts</h1>
         <Link
@@ -75,7 +70,6 @@ const handleDeleteConfirm = async () => {
         </Link>
       </div>
 
-      {/* Blog Posts List */}
       <div className="space-y-6">
         {posts.length === 0 ? (
           <div className={`text-center py-10 rounded-lg ${
@@ -138,7 +132,6 @@ const handleDeleteConfirm = async () => {
         )}
       </div>
 
-      {/* Delete Confirmation Modal */}
       {showDeleteModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className={`p-6 rounded-lg shadow-xl max-w-md w-full ${

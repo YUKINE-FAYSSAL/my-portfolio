@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { fetchItem, updateItem } from '../../../api/api';
 import { useToast } from '../../../contexts/ToastContext';
-import { FiSave, FiArrowLeft, FiImage, FiClock, FiCalendar, FiTrash2, FiUpload } from 'react-icons/fi';
+import { FiSave, FiArrowLeft, FiImage, FiTrash2, FiUpload } from 'react-icons/fi';
 import { useTheme } from '../../../contexts/ThemeContext';
 import ReactQuill from 'react-quill';
 import 'react-quill/dist/quill.snow.css';
+import { getBlogPost, updateBlogPost, uploadBlogImage } from '../../../api/blogApi';
 
 const EditBlogPage = () => {
   const { id } = useParams();
@@ -14,9 +14,10 @@ const EditBlogPage = () => {
     title: '',
     content: '',
     excerpt: '',
-    date: new Date().toISOString().split('T')[0],
-    readTime: '5 min',
+    categories: [],
     featuredImage: '',
+    featured: false,
+    date: new Date().toISOString().split('T')[0],
     media: []
   });
   const [loading, setLoading] = useState(true);
@@ -27,18 +28,19 @@ const EditBlogPage = () => {
   useEffect(() => {
     const loadPost = async () => {
       try {
-        const { data } = await fetchItem('blog', id);
+        const post = await getBlogPost(id);
         setForm({
-          title: data.title,
-          content: data.content,
-          excerpt: data.excerpt || '',
-          date: data.date ? new Date(data.date).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
-          readTime: data.readTime || '5 min',
-          featuredImage: data.featuredImage || '',
-          media: data.media || []
+          title: post.title,
+          content: post.content,
+          excerpt: post.excerpt || '',
+          categories: post.categories || [],
+          featuredImage: post.featuredImage || '',
+          featured: post.featured || false,
+          date: post.date ? new Date(post.date).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
+          media: post.media || []
         });
       } catch (err) {
-        showToast('error', 'Failed to load post');
+        showToast('error', err.message);
       } finally {
         setLoading(false);
       }
@@ -47,8 +49,11 @@ const EditBlogPage = () => {
   }, [id]);
 
   const handleChange = (e) => {
-    const { name, value } = e.target;
-    setForm(prev => ({ ...prev, [name]: value }));
+    const { name, value, type, checked } = e.target;
+    setForm(prev => ({
+      ...prev,
+      [name]: type === 'checkbox' ? checked : value
+    }));
   };
 
   const handleContentChange = (value) => {
@@ -59,27 +64,15 @@ const EditBlogPage = () => {
     const file = e.target.files[0];
     if (!file) return;
 
-    const formData = new FormData();
-    formData.append('file', file);
-
     try {
-      const response = await fetch('/api/upload', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        },
-        body: formData
-      });
-      
-      const data = await response.json();
-      if (response.ok) {
-        setForm(prev => ({ ...prev, featuredImage: data.url }));
-        showToast('success', 'Image uploaded successfully');
-      } else {
-        throw new Error(data.message || 'Upload failed');
-      }
+      setIsSubmitting(true);
+      const { url } = await uploadBlogImage(file);
+      setForm(prev => ({ ...prev, featuredImage: url }));
+      showToast('success', 'Image uploaded successfully');
     } catch (err) {
       showToast('error', err.message);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -88,18 +81,8 @@ const EditBlogPage = () => {
     if (!files.length) return;
 
     try {
-      const uploadPromises = files.map(file => {
-        const formData = new FormData();
-        formData.append('file', file);
-        return fetch('/api/upload', {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${localStorage.getItem('token')}`
-          },
-          body: formData
-        }).then(res => res.json());
-      });
-
+      setIsSubmitting(true);
+      const uploadPromises = files.map(file => uploadBlogImage(file));
       const results = await Promise.all(uploadPromises);
       const newMedia = results.map(res => ({
         url: res.url,
@@ -113,6 +96,8 @@ const EditBlogPage = () => {
       showToast('success', 'Media uploaded successfully');
     } catch (err) {
       showToast('error', 'Failed to upload media');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -123,19 +108,19 @@ const EditBlogPage = () => {
     }));
   };
 
-const handleSubmit = async (e) => {
-  e.preventDefault();
-  setIsSubmitting(true);
-  try {
-    await updateItem('blog', id, form);
-    showToast('success', 'Post updated successfully');
-    navigate('/admin/blog');
-  } catch (err) {
-    showToast('error', err.message || 'Failed to update post');
-  } finally {
-    setIsSubmitting(false);
-  }
-};
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    try {
+      setIsSubmitting(true);
+      await updateBlogPost(id, form);
+      showToast('success', 'Post updated successfully');
+      navigate('/admin/blog');
+    } catch (err) {
+      showToast('error', err.message);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
   if (loading) {
     return (

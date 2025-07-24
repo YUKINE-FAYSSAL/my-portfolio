@@ -143,20 +143,21 @@ const ProjectCard = ({ project }) => {
 
         {/* View Details Button */}
         <div className="mt-auto">
+// In ProjectCard.jsx, modify the Link component:
 <Link 
   to={`/project/${project._id?.$oid || project._id}`}
   className={`inline-flex items-center justify-center w-full px-4 py-2.5 text-sm font-medium rounded-lg transition-all duration-200 group ${theme === 'dark' ? 'bg-indigo-600 text-white hover:bg-indigo-500 hover:shadow-lg hover:shadow-indigo-500/25' : 'bg-indigo-600 text-white hover:bg-indigo-700 hover:shadow-lg hover:shadow-indigo-500/25'} animate-glow`}
 >
-            View Details
-            <svg
-              className="ml-2 w-4 h-4 transition-transform duration-200 group-hover:translate-x-0.5"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
-            </svg>
-          </Link>
+  View Details
+  <svg
+    className="ml-2 w-4 h-4 transition-transform duration-200 group-hover:translate-x-0.5"
+    fill="none"
+    stroke="currentColor"
+    viewBox="0 0 24 24"
+  >
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
+  </svg>
+</Link>
         </div>
 
         {/* Quick Action Links */}

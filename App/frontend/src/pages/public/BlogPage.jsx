@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
 import { Link } from 'react-router-dom';
 import { useTheme } from '../../contexts/ThemeContext';
 import { FiClock, FiCalendar, FiHeart, FiShare2, FiBookmark } from 'react-icons/fi';
 import { motion, AnimatePresence } from 'framer-motion';
 import useScrollToTop from '../../hooks/useScrollToTop';
+import { getBlogPosts, getBlogCategories, likeBlogPost } from '../../api/blogApi';
 
 const BlogPage = () => {
   useScrollToTop();
@@ -19,25 +19,14 @@ const BlogPage = () => {
   useEffect(() => {
     const fetchBlogData = async () => {
       try {
-        const [postsResponse, categoriesResponse] = await Promise.all([
-          axios.get('/api/blog'),
-          axios.get('/api/blog/categories')
+        const [postsData, categoriesData] = await Promise.all([
+          getBlogPosts(),
+          getBlogCategories()
         ]);
 
-        const postsData = postsResponse.data.map(post => ({
-          ...post,
-          id: post._id || post.id,
-          date: post.date || new Date().toISOString(),
-          readTime: post.readTime || `${Math.max(1, Math.floor(post.content.length / 1000))} min read`,
-          slug: post.slug || post.title.toLowerCase().replace(/ /g, '-'),
-          likes: post.likes || Math.floor(Math.random() * 100),
-          isBookmarked: false
-        }));
-
         setPosts(postsData);
-        setCategories(['all', ...categoriesResponse.data]);
+        setCategories(['all', ...categoriesData]);
         
-        // Set the most recent post as featured
         if (postsData.length > 0) {
           setFeaturedPost(postsData[0]);
         }
@@ -63,6 +52,23 @@ const BlogPage = () => {
     setPosts(posts.map(post => 
       post.id === postId ? { ...post, isBookmarked: !post.isBookmarked } : post
     ));
+  };
+
+  const handleLike = async (postId) => {
+    try {
+      await likeBlogPost(postId);
+      setPosts(posts.map(post => 
+        post._id === postId ? { ...post, likes: (post.likes || 0) + 1 } : post
+      ));
+      if (featuredPost?._id === postId) {
+        setFeaturedPost({ 
+          ...featuredPost, 
+          likes: (featuredPost.likes || 0) + 1 
+        });
+      }
+    } catch (error) {
+      console.error('Failed to like post:', error);
+    }
   };
 
   const formatDate = (dateString) => {

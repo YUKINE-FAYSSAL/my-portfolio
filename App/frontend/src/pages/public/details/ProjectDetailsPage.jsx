@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { fetchItem } from '../../../api/api';
+import axios from 'axios';
 import { useTheme } from '../../../contexts/ThemeContext';
 import AnimatedSection from '../../../components/ui/AnimatedSection';
 import { FiArrowLeft, FiExternalLink, FiGithub } from 'react-icons/fi';
@@ -22,19 +23,21 @@ const ProjectDetailsPage = () => {
 
 
 
-  useEffect(() => {
-    const loadProject = async () => {
-      try {
-        const { data } = await fetchItem('projects', id);
-        setProject(data);
-      } catch (err) {
-        setError('Failed to load project');
-      } finally {
-        setLoading(false);
-      }
-    };
-    loadProject();
-  }, [id]);
+// In ProjectDetailsPage.jsx, modify the useEffect hook:
+useEffect(() => {
+  const loadProject = async () => {
+    try {
+      const response = await axios.get(`http://localhost:5000/api/public/projects/${id}`);
+      setProject(response.data);
+    } catch (err) {
+      setError('Failed to load project');
+      console.error('Error loading project:', err.response?.data || err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+  loadProject();
+}, [id]);
 
   if (loading) {
     return (

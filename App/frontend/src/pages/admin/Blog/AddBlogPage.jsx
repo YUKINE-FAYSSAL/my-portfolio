@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
-import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 import { useToast } from '../../../contexts/ToastContext';
 import { FiSave, FiUpload, FiX } from 'react-icons/fi';
 import ReactQuill from 'react-quill';
 import 'react-quill/dist/quill.snow.css';
+import { createBlogPost, uploadBlogImage } from '../../../api/blogApi';
 
 const AddBlogPage = () => {
   const [form, setForm] = useState({
@@ -54,22 +54,13 @@ const AddBlogPage = () => {
     const file = e.target.files[0];
     if (!file) return;
 
-    const formData = new FormData();
-    formData.append('file', file);
-
     try {
       setLoading(true);
-      const response = await axios.post('/api/admin/blog/upload', formData, {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
-          'Content-Type': 'multipart/form-data'
-        }
-      });
-      
-      setForm(prev => ({ ...prev, featuredImage: response.data.url }));
+      const { url } = await uploadBlogImage(file);
+      setForm(prev => ({ ...prev, featuredImage: url }));
       showToast('success', 'Image uploaded successfully');
     } catch (err) {
-      showToast('error', err.response?.data?.message || 'Upload failed');
+      showToast('error', err.message);
     } finally {
       setLoading(false);
     }
@@ -79,15 +70,11 @@ const AddBlogPage = () => {
     e.preventDefault();
     try {
       setLoading(true);
-      await axios.post('/api/admin/blog/posts', form, {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        }
-      });
+      await createBlogPost(form);
       showToast('success', 'Blog post created successfully!');
       navigate('/admin/blog');
     } catch (error) {
-      showToast('error', error.response?.data?.message || 'Failed to create blog post');
+      showToast('error', error.message);
     } finally {
       setLoading(false);
     }

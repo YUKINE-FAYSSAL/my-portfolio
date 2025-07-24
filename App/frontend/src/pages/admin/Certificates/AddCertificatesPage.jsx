@@ -1,102 +1,404 @@
-import React, { useState } from 'react';
-import { createItem } from '../../../api/api';
-import { useNavigate } from 'react-router-dom';
-import { useToast } from '../../../contexts/ToastContext';
+import React, { useState } from "react";
+import { useNavigate } from "react-router-dom";
+import axios from "axios";
+import { useTheme } from "../../../contexts/ThemeContext";
+import AnimatedSection from "../../../components/ui/AnimatedSection";
 
 const AddCertificatePage = () => {
-  const [form, setForm] = useState({ 
-    name: '',
-    issuer: '',
-    date: '',
-    credentialId: ''
+  const [form, setForm] = useState({
+    name: "",
+    issuer: "",
+    issueDate: "",
+    expiryDate: "",
+    credentialId: "",
+    credentialUrl: "",
+    category: "Technical",
+    status: "Active",
+    description: "",
+    skills: [],
+    level: "Professional",
+    icon: "",
+    priority: "Medium"
   });
+  const [imageFile, setImageFile] = useState(null);
+  const [imagePreview, setImagePreview] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [skillInput, setSkillInput] = useState("");
   const navigate = useNavigate();
-  const { showToast } = useToast();
+  const { theme } = useTheme();
 
-const handleSubmit = async (e) => {
-  e.preventDefault();
-  setLoading(true);
-  try {
-    await createItem('certificates', form);
-    showToast('success', 'Certificate added successfully');
-    navigate('/admin/certificates');
-  } catch (err) {
-    showToast('error', err.response?.data?.message || 'Failed to add certificate');
-  } finally {
-    setLoading(false);
-  }
-};
+  const handleImageChange = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    setImageFile(file);
+
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setImagePreview(reader.result);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const addSkill = () => {
+    if (skillInput.trim() && !form.skills.includes(skillInput.trim())) {
+      setForm({
+        ...form,
+        skills: [...form.skills, skillInput.trim()]
+      });
+      setSkillInput("");
+    }
+  };
+
+  const removeSkill = (skillToRemove) => {
+    setForm({
+      ...form,
+      skills: form.skills.filter(skill => skill !== skillToRemove)
+    });
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!form.name.trim() || !form.issuer.trim()) {
+      alert("Name and Issuer are required");
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      const data = new FormData();
+      Object.keys(form).forEach(key => {
+        if (key === 'skills') {
+          data.append(key, JSON.stringify(form[key]));
+        } else {
+          data.append(key, form[key]);
+        }
+      });
+      
+      if (imageFile) {
+        data.append("image", imageFile);
+      }
+
+      await axios.post("http://localhost:5000/api/certificates", data, {
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem("token")}`,
+          "Content-Type": "multipart/form-data",
+        },
+      });
+
+      alert("Certificate added successfully!");
+      navigate("/admin/certificates");
+    } catch (err) {
+      alert(err.response?.data?.message || "Failed to add certificate");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
-    <div className="max-w-md mx-auto p-6 bg-white dark:bg-gray-800 rounded-lg shadow-md mt-8">
-      <h2 className="text-2xl font-bold mb-6 text-gray-800 dark:text-white">Add New Certificate</h2>
-      
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <div>
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-            Certificate Name*
-          </label>
-          <input
-            type="text"
-            name="name"
-            value={form.name}
-            onChange={(e) => setForm({...form, name: e.target.value})}
-            className="w-full px-3 py-2 border rounded-md dark:bg-gray-700 dark:text-white"
-            required
-          />
+    <div className={`max-w-4xl mx-auto p-6 rounded-lg shadow-lg mt-10 ${theme === 'dark' ? 'bg-gray-800' : 'bg-white'}`}>
+      <AnimatedSection>
+        <h1 className={`text-2xl md:text-3xl font-bold mb-6 ${theme === 'dark' ? 'text-indigo-400' : 'text-indigo-600'}`}>
+          Add New Certificate
+        </h1>
+      </AnimatedSection>
+
+      <form onSubmit={handleSubmit} className="space-y-6">
+        {/* Certificate Name & Issuer */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <AnimatedSection delay={100}>
+            <div>
+              <label className={`block mb-2 font-semibold ${theme === 'dark' ? 'text-gray-200' : 'text-gray-700'}`}>
+                Certificate Name <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="text"
+                className={`w-full border rounded px-4 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500 ${theme === 'dark' ? 'bg-gray-700 text-white border-gray-600' : 'bg-white border-gray-300'}`}
+                value={form.name}
+                onChange={(e) => setForm({ ...form, name: e.target.value })}
+                required
+                placeholder="AWS Certified Solutions Architect"
+              />
+            </div>
+          </AnimatedSection>
+
+          <AnimatedSection delay={150}>
+            <div>
+              <label className={`block mb-2 font-semibold ${theme === 'dark' ? 'text-gray-200' : 'text-gray-700'}`}>
+                Issuer <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="text"
+                className={`w-full border rounded px-4 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500 ${theme === 'dark' ? 'bg-gray-700 text-white border-gray-600' : 'bg-white border-gray-300'}`}
+                value={form.issuer}
+                onChange={(e) => setForm({ ...form, issuer: e.target.value })}
+                required
+                placeholder="Amazon Web Services"
+              />
+            </div>
+          </AnimatedSection>
         </div>
 
-        <div>
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-            Issuer*
-          </label>
-          <input
-            type="text"
-            name="issuer"
-            value={form.issuer}
-            onChange={(e) => setForm({...form, issuer: e.target.value})}
-            className="w-full px-3 py-2 border rounded-md dark:bg-gray-700 dark:text-white"
-            required
-          />
+        {/* Dates */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <AnimatedSection delay={200}>
+            <div>
+              <label className={`block mb-2 font-semibold ${theme === 'dark' ? 'text-gray-200' : 'text-gray-700'}`}>
+                Issue Date <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="date"
+                className={`w-full border rounded px-4 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500 ${theme === 'dark' ? 'bg-gray-700 text-white border-gray-600' : 'bg-white border-gray-300'}`}
+                value={form.issueDate}
+                onChange={(e) => setForm({ ...form, issueDate: e.target.value })}
+                required
+              />
+            </div>
+          </AnimatedSection>
+
+          <AnimatedSection delay={250}>
+            <div>
+              <label className={`block mb-2 font-semibold ${theme === 'dark' ? 'text-gray-200' : 'text-gray-700'}`}>
+                Expiry Date
+              </label>
+              <input
+                type="date"
+                className={`w-full border rounded px-4 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500 ${theme === 'dark' ? 'bg-gray-700 text-white border-gray-600' : 'bg-white border-gray-300'}`}
+                value={form.expiryDate}
+                onChange={(e) => setForm({ ...form, expiryDate: e.target.value })}
+              />
+            </div>
+          </AnimatedSection>
         </div>
 
-        <div>
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-            Date*
-          </label>
-          <input
-            type="date"
-            name="date"
-            value={form.date}
-            onChange={(e) => setForm({...form, date: e.target.value})}
-            className="w-full px-3 py-2 border rounded-md dark:bg-gray-700 dark:text-white"
-            required
-          />
+        {/* Credential Info */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <AnimatedSection delay={300}>
+            <div>
+              <label className={`block mb-2 font-semibold ${theme === 'dark' ? 'text-gray-200' : 'text-gray-700'}`}>
+                Credential ID
+              </label>
+              <input
+                type="text"
+                className={`w-full border rounded px-4 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500 ${theme === 'dark' ? 'bg-gray-700 text-white border-gray-600' : 'bg-white border-gray-300'}`}
+                value={form.credentialId}
+                onChange={(e) => setForm({ ...form, credentialId: e.target.value })}
+                placeholder="SAA-C03-123456789"
+              />
+            </div>
+          </AnimatedSection>
+
+          <AnimatedSection delay={350}>
+            <div>
+              <label className={`block mb-2 font-semibold ${theme === 'dark' ? 'text-gray-200' : 'text-gray-700'}`}>
+                Credential URL
+              </label>
+              <input
+                type="url"
+                className={`w-full border rounded px-4 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500 ${theme === 'dark' ? 'bg-gray-700 text-white border-gray-600' : 'bg-white border-gray-300'}`}
+                value={form.credentialUrl}
+                onChange={(e) => setForm({ ...form, credentialUrl: e.target.value })}
+                placeholder="https://credly.com/badges/..."
+              />
+            </div>
+          </AnimatedSection>
         </div>
 
-        <div>
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-            Credential ID
-          </label>
-          <input
-            type="text"
-            name="credentialId"
-            value={form.credentialId}
-            onChange={(e) => setForm({...form, credentialId: e.target.value})}
-            className="w-full px-3 py-2 border rounded-md dark:bg-gray-700 dark:text-white"
-          />
+        {/* Category, Status, Level, Priority */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          <AnimatedSection delay={400}>
+            <div>
+              <label className={`block mb-2 font-semibold ${theme === 'dark' ? 'text-gray-200' : 'text-gray-700'}`}>
+                Category
+              </label>
+              <select
+                className={`w-full border rounded px-4 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500 ${theme === 'dark' ? 'bg-gray-700 text-white border-gray-600' : 'bg-white border-gray-300'}`}
+                value={form.category}
+                onChange={(e) => setForm({ ...form, category: e.target.value })}
+              >
+                <option value="Cloud Computing">☁️ Cloud Computing</option>
+                <option value="Software Development">💻 Software Development</option>
+                <option value="DevOps">🔄 DevOps</option>
+                <option value="Cybersecurity">🛡️ Cybersecurity</option>
+                <option value="Data & Analytics">📊 Data & Analytics</option>
+                <option value="Project Management">📋 Project Management</option>
+                <option value="AI/ML">🤖 AI/ML</option>
+                <option value="Mobile Development">📱 Mobile Development</option>
+                <option value="Database">🗄️ Database</option>
+                <option value="Networking">🌐 Networking</option>
+                <option value="Other">🔧 Other</option>
+              </select>
+            </div>
+          </AnimatedSection>
+
+          <AnimatedSection delay={450}>
+            <div>
+              <label className={`block mb-2 font-semibold ${theme === 'dark' ? 'text-gray-200' : 'text-gray-700'}`}>
+                Status
+              </label>
+              <select
+                className={`w-full border rounded px-4 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500 ${theme === 'dark' ? 'bg-gray-700 text-white border-gray-600' : 'bg-white border-gray-300'}`}
+                value={form.status}
+                onChange={(e) => setForm({ ...form, status: e.target.value })}
+              >
+                <option value="Active">✅ Active</option>
+                <option value="Expired">⏰ Expired</option>
+                <option value="Pending">🔄 Pending</option>
+                <option value="Archived">📦 Archived</option>
+              </select>
+            </div>
+          </AnimatedSection>
+
+          <AnimatedSection delay={500}>
+            <div>
+              <label className={`block mb-2 font-semibold ${theme === 'dark' ? 'text-gray-200' : 'text-gray-700'}`}>
+                Level
+              </label>
+              <select
+                className={`w-full border rounded px-4 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500 ${theme === 'dark' ? 'bg-gray-700 text-white border-gray-600' : 'bg-white border-gray-300'}`}
+                value={form.level}
+                onChange={(e) => setForm({ ...form, level: e.target.value })}
+              >
+                <option value="Foundation">🟢 Foundation</option>
+                <option value="Associate">🔵 Associate</option>
+                <option value="Professional">🟡 Professional</option>
+                <option value="Expert">🔴 Expert</option>
+                <option value="Specialty">⭐ Specialty</option>
+              </select>
+            </div>
+          </AnimatedSection>
+
+          <AnimatedSection delay={550}>
+            <div>
+              <label className={`block mb-2 font-semibold ${theme === 'dark' ? 'text-gray-200' : 'text-gray-700'}`}>
+                Priority
+              </label>
+              <select
+                className={`w-full border rounded px-4 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500 ${theme === 'dark' ? 'bg-gray-700 text-white border-gray-600' : 'bg-white border-gray-300'}`}
+                value={form.priority}
+                onChange={(e) => setForm({ ...form, priority: e.target.value })}
+              >
+                <option value="Low">🟢 Low</option>
+                <option value="Medium">🟡 Medium</option>
+                <option value="High">🔴 High</option>
+                <option value="Critical">⚡ Critical</option>
+              </select>
+            </div>
+          </AnimatedSection>
         </div>
 
-        <button
-          type="submit"
-          disabled={loading}
-          className={`w-full py-2 px-4 rounded-md text-white ${
-            loading ? 'bg-indigo-400' : 'bg-indigo-600 hover:bg-indigo-700'
-          } transition`}
-        >
-          {loading ? 'Adding...' : 'Add Certificate'}
-        </button>
+        {/* Icon */}
+        <AnimatedSection delay={600}>
+          <div>
+            <label className={`block mb-2 font-semibold ${theme === 'dark' ? 'text-gray-200' : 'text-gray-700'}`}>
+              Icon (FontAwesome class)
+            </label>
+            <input
+              type="text"
+              className={`w-full border rounded px-4 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500 ${theme === 'dark' ? 'bg-gray-700 text-white border-gray-600' : 'bg-white border-gray-300'}`}
+              value={form.icon}
+              onChange={(e) => setForm({ ...form, icon: e.target.value })}
+              placeholder="fas fa-award"
+            />
+          </div>
+        </AnimatedSection>
+
+        {/* Skills */}
+        <AnimatedSection delay={650}>
+          <div>
+            <label className={`block mb-2 font-semibold ${theme === 'dark' ? 'text-gray-200' : 'text-gray-700'}`}>
+              Related Skills
+            </label>
+            <div className="flex gap-2 mb-2">
+              <input
+                type="text"
+                className={`flex-1 border rounded px-4 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500 ${theme === 'dark' ? 'bg-gray-700 text-white border-gray-600' : 'bg-white border-gray-300'}`}
+                value={skillInput}
+                onChange={(e) => setSkillInput(e.target.value)}
+                placeholder="Add a skill..."
+                onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addSkill())}
+              />
+              <button
+                type="button"
+                onClick={addSkill}
+                className="px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700"
+              >
+                Add
+              </button>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {form.skills.map((skill, index) => (
+                <span
+                  key={index}
+                  className={`px-3 py-1 rounded-full text-sm ${theme === 'dark' ? 'bg-indigo-600 text-white' : 'bg-indigo-100 text-indigo-800'} flex items-center gap-2`}
+                >
+                  {skill}
+                  <button
+                    type="button"
+                    onClick={() => removeSkill(skill)}
+                    className="text-red-500 hover:text-red-700"
+                  >
+                    ×
+                  </button>
+                </span>
+              ))}
+            </div>
+          </div>
+        </AnimatedSection>
+
+        {/* Description */}
+        <AnimatedSection delay={700}>
+          <div>
+            <label className={`block mb-2 font-semibold ${theme === 'dark' ? 'text-gray-200' : 'text-gray-700'}`}>
+              Description
+            </label>
+            <textarea
+              rows="4"
+              className={`w-full border rounded px-4 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500 ${theme === 'dark' ? 'bg-gray-700 text-white border-gray-600' : 'bg-white border-gray-300'}`}
+              value={form.description}
+              onChange={(e) => setForm({ ...form, description: e.target.value })}
+              placeholder="Describe what this certificate covers and your achievements..."
+            />
+          </div>
+        </AnimatedSection>
+
+        {/* Certificate Image */}
+        <AnimatedSection delay={750}>
+          <div>
+            <label className={`block mb-2 font-semibold ${theme === 'dark' ? 'text-gray-200' : 'text-gray-700'}`}>
+              Certificate Image/Badge
+            </label>
+            <input
+              type="file"
+              accept="image/*"
+              onChange={handleImageChange}
+              className={`w-full text-sm ${theme === 'dark' ? 'text-gray-300 bg-gray-700' : 'text-gray-600 bg-white'} border rounded p-2 ${theme === 'dark' ? 'border-gray-600' : 'border-gray-300'}`}
+            />
+            {imagePreview && (
+              <div className="mt-4">
+                <p className={`text-sm mb-2 ${theme === 'dark' ? 'text-gray-300' : 'text-gray-600'}`}>Preview:</p>
+                <img
+                  src={imagePreview}
+                  alt="Preview"
+                  className="w-32 h-32 object-cover rounded-md border border-gray-300 dark:border-gray-600 shadow-md"
+                />
+              </div>
+            )}
+          </div>
+        </AnimatedSection>
+
+        {/* Submit Button */}
+        <AnimatedSection delay={800}>
+          <button
+            type="submit"
+            disabled={loading}
+            className={`w-full py-3 rounded-md text-white font-semibold transition ${loading
+              ? "bg-indigo-400 cursor-not-allowed"
+              : "bg-indigo-600 hover:bg-indigo-700"}`}
+          >
+            {loading ? "Adding Certificate..." : "Add Certificate"}
+          </button>
+        </AnimatedSection>
       </form>
     </div>
   );

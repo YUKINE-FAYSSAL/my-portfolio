@@ -24,6 +24,7 @@ const SkillCard = ({ skill }) => {
   const { theme } = useTheme();
 
   const getImageUrl = () => {
+    const imgUrl = skill.imageUrl || skill.image_url;
     if (!skill.imageUrl) return null;
     if (skill.imageUrl.startsWith('http')) {
       return skill.imageUrl;
