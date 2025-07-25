@@ -3,6 +3,7 @@ import { BrowserRouter as Router, Routes, Route, useLocation } from 'react-route
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { ToastProvider } from './contexts/ToastContext';
+import { LanguageProvider } from './contexts/LanguageContext';
 
 import Navbar from './components/common/Navbar';
 import Footer from './components/common/Footer';
@@ -12,9 +13,8 @@ import HomePage from './pages/public/HomePage';
 import LoginPage from './pages/auth/LoginPage';
 import PortfolioPage from './pages/public/PortfolioPage';
 import ContactPage from './pages/public/ContactPage';
-import BlogPage from './pages/public/BlogPage';
 import AboutPage from './pages/public/AboutPage';
-import NotFoundPage from './pages/public/NotFoundPage'; // New import
+import NotFoundPage from './pages/public/NotFoundPage';
 
 // Detail Pages
 import ProjectDetailsPage from './pages/public/details/ProjectDetailsPage';
@@ -41,9 +41,7 @@ import EditEducationPage from './pages/admin/Education/EditEducationPage';
 import CertificatesPage from './pages/admin/Certificates/CertificatesPage';
 import AddCertificatesPage from './pages/admin/Certificates/AddCertificatesPage';
 import EditCertificatesPage from './pages/admin/Certificates/EditCertificatesPage';
-import AdminBlogPage from './pages/admin/Blog/BlogPage';
-import AddBlogPage from './pages/admin/Blog/AddBlogPage';
-import EditBlogPage from './pages/admin/Blog/EditBlogPage';
+import MessagesPage from './pages/admin/Messages/MessagesPage'; // Added MessagesPage import
 
 const AppContent = () => {
   const location = useLocation();
@@ -69,7 +67,6 @@ const AppContent = () => {
           <Route path="/login" element={<LoginPage />} />
           <Route path="/portfolio" element={<PortfolioPage />} />
           <Route path="/contact" element={<ContactPage />} />
-          <Route path="/blog" element={<BlogPage />} />
           <Route path="/about" element={<AboutPage />} />
 
           {/* Detail Pages */}
@@ -77,7 +74,7 @@ const AppContent = () => {
           <Route path="/experience/:id" element={<ExperienceDetailsPage />} />
           <Route path="/education/:id" element={<EducationDetailsPage />} />
           <Route path="/skill/:id" element={<SkillDetailsPage />} />
-          <Route path="/certificate/:id" element={<CertificateDetailsPage />} />
+          <Route path="/certificates/:id" element={<CertificateDetailsPage />} />
 
           {/* Admin Protected Routes */}
           <Route element={<ProtectedRoute />}>
@@ -97,9 +94,7 @@ const AppContent = () => {
             <Route path="/admin/certificates" element={<CertificatesPage />} />
             <Route path="/admin/certificates/add" element={<AddCertificatesPage />} />
             <Route path="/admin/certificates/edit/:id" element={<EditCertificatesPage />} />
-            <Route path="/admin/blog" element={<AdminBlogPage />} />
-            <Route path="/admin/blog/add" element={<AddBlogPage />} />
-            <Route path="/admin/blog/edit/:id" element={<EditBlogPage />} />
+            <Route path="/admin/messages" element={<MessagesPage />} /> {/* Added Messages Route */}
           </Route>
 
           {/* 404 Route */}
@@ -113,17 +108,19 @@ const AppContent = () => {
 
 const App = () => {
   return (
-    <ThemeProvider>
-      <AuthProvider>
-        <ToastProvider>
-          <Router>
-            <div className="flex flex-col min-h-screen bg-gray-50 dark:bg-gray-900">
-              <AppContent />
-            </div>
-          </Router>
-        </ToastProvider>
-      </AuthProvider>
-    </ThemeProvider>
+    <LanguageProvider>
+      <ThemeProvider>
+        <AuthProvider>
+          <ToastProvider>
+            <Router>
+              <div className="flex flex-col min-h-screen bg-gray-50 dark:bg-gray-900">
+                <AppContent />
+              </div>
+            </Router>
+          </ToastProvider>
+        </AuthProvider>
+      </ThemeProvider>
+    </LanguageProvider>
   );
 };
 

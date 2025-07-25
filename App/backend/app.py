@@ -29,7 +29,6 @@ collections = {
     'education': db.education,
     'experience': db.experience,
     'certificates': db.certificates,
-    'blog': db.blog,
     'users': db.users,
     'settings': db.settings,
     'messages': db.messages
@@ -57,10 +56,19 @@ if collections['users'].count_documents({'role': 'admin'}) == 0:
 # Initialize settings
 if collections['settings'].count_documents({}) == 0:
     collections['settings'].insert_one({
-        'site_title': 'VibeCanvas',
+        'site_title': 'Your Portfolio',
         'theme': 'light',
         'maintenance_mode': False,
-        'analytics_enabled': False
+        'social': {  # Add default social links
+            'github': '',
+            'linkedin': '',
+            'twitter': ''
+        },
+        'contact_info': {
+            'email': 'abaibat.fayssal@hotmail.com',
+            'phone': '+212694487224',
+            'address': 'Rabat, Morocco'
+        }
     })
 
 # ========== AUTHENTICATION ========== #
@@ -1620,6 +1628,39 @@ def certificate_stats(current_user):
         print(f"Error getting certificate stats: {str(e)}")
         return jsonify({'message': f'Failed to get statistics: {str(e)}'}), 500 
 
+@app.route('/api/public/certificates/<id>', methods=['GET'])
+def get_public_certificate(id):
+    try:
+        if not ObjectId.is_valid(id):
+            return jsonify({'message': 'Invalid certificate ID format'}), 400
+        certificate_id = ObjectId(id)
+        certificate = collections['certificates'].find_one({'_id': certificate_id})
+        if not certificate:
+            return jsonify({'message': 'Certificate not found'}), 404
+
+        # ممكن تزيد معالجة الحقول مثل تحويل ObjectId إلى string
+        certificate['_id'] = str(certificate['_id'])
+
+        # إضافة حقول محسوبة مثل isExpiringSoon كما في الـ route الخاص بالadmin
+        if certificate.get('expiryDate'):
+            expiry_date = certificate['expiryDate']
+            if isinstance(expiry_date, str):
+                try:
+                    expiry_date = datetime.fromisoformat(expiry_date.replace('Z', '+00:00'))
+                except:
+                    expiry_date = datetime.strptime(expiry_date[:10], '%Y-%m-%d')
+            days_until_expiry = (expiry_date - datetime.now()).days
+            certificate['isExpiringSoon'] = 0 < days_until_expiry <= 30
+            certificate['daysUntilExpiry'] = days_until_expiry
+        else:
+            certificate['isExpiringSoon'] = False
+            certificate['daysUntilExpiry'] = None
+
+        return json_util.dumps(certificate), 200
+
+    except Exception as e:
+        return jsonify({'message': f'Error fetching certificate: {str(e)}'}), 500
+
 
 # ========== PUBLIC ❤️ ========== #
 
@@ -1762,38 +1803,128 @@ def upload_file(current_user):
 def serve_upload(filename):
     return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
 
-# ========== CONTACT FORM ========== #
-@app.route('/api/contact', methods=['POST'])
-def handle_contact():
-    data = request.json
+# ========== MESSAGE/CONTACT ROUTES ==========
+@app.route('/api/messages', methods=['POST'])
+def send_message():
+    data = request.get_json()
+
+    if not data.get('name') or not data.get('email') or not data.get('message'):
+        return jsonify({'error': 'Missing required fields'}), 400
+
     message = {
-        'name': data.get('name'),
-        'email': data.get('email'),
-        'message': data.get('message'),
-        'created_at': datetime.datetime.utcnow(),
-        'read': False
+        'name': data['name'],
+        'email': data['email'],
+        'subject': data.get('subject', 'No Subject'),
+        'message': data['message'],
+        'platform': data.get('platform', 'website'),
+        'read': False,
+        'created_at': datetime.utcnow()
     }
-    
-    collections['messages'].insert_one(message)
-    
+
     try:
-        msg = MIMEText(f"""
-        Name: {message['name']}
-        Email: {message['email']}
-        Message: {message['message']}
-        """)
-        msg['Subject'] = 'New Contact Form Submission'
-        msg['From'] = 'noreply@vibecanvas.com'
-        msg['To'] = 'admin@vibecanvas.com'
-        
-        with smtplib.SMTP('smtp.gmail.com', 587) as server:
-            server.starttls()
-            server.login('your_email@gmail.com', 'your_password')
-            server.send_message(msg)
+        collections['messages'].insert_one(message)
+        return jsonify({'message': 'Message saved successfully'}), 201
     except Exception as e:
-        print(f"Failed to send email: {str(e)}")
-    
-    return jsonify({'message': 'Thank you for your message!'})
+        print(f"Error saving message: {e}")
+        return jsonify({'error': 'Failed to save message'}), 500
+
+
+
+@app.route('/api/messages/<id>/read', methods=['PUT'])
+@token_required(roles=['admin'])
+def mark_as_read(current_user, id):
+    try:
+        result = collections['messages'].update_one(
+            {'_id': ObjectId(id)},
+            {'$set': {'read': True}}
+        )
+        if result.modified_count == 0:
+            return jsonify({'message': 'Message not found or already read'}), 404
+        return jsonify({'message': 'Marked as read'}), 200
+    except Exception:
+        return jsonify({'message': 'Invalid ID format'}), 400
+
+@app.route('/api/messages/<id>', methods=['DELETE'])
+@token_required(roles=['admin'])
+def delete_message(current_user, id):
+    try:
+        result = collections['messages'].delete_one({'_id': ObjectId(id)})
+        if result.deleted_count == 0:
+            return jsonify({'message': 'Message not found'}), 404
+        return jsonify({'message': 'Message deleted'}), 200
+    except Exception:
+        return jsonify({'message': 'Invalid ID format'}), 400
+
+@app.route('/api/messages', methods=['GET'])
+@token_required(roles=['admin'])
+def get_messages(current_user):
+    try:
+        page = int(request.args.get('page', 1))
+        per_page = int(request.args.get('per_page', 10))
+        skip = (page - 1) * per_page
+
+        query = {}
+        total = collections['messages'].count_documents(query)
+        messages = list(collections['messages'].find(query)
+                        .sort('created_at', -1)
+                        .skip(skip)
+                        .limit(per_page))
+
+        return jsonify({
+            'data': json_util.dumps(messages),
+            'total': total,
+            'page': page,
+            'per_page': per_page,
+            'total_pages': (total + per_page - 1) // per_page
+        }), 200
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+# ========== SOCIAL LINKS ==========
+@app.route('/api/public/contact-info', methods=['GET'])
+def get_contact_info():
+    try:
+        settings = collections['settings'].find_one()
+        if not settings:
+            return jsonify({'error': 'Settings not found'}), 404
+
+        contact_info = {
+            'email': 'abaibat.fayssal@hotmail.com',
+            'phone': '+212694487224',
+            'address': 'Rabat, Morocco'
+        }
+
+        social = {
+            'github': 'https://github.com/YUKINE-FAYSSAL/',
+            'linkedin': 'https://www.linkedin.com/in/fayssal-abaibat-28b5a3353/',
+            'facebook': 'https://www.facebook.com/fayssal.abaibat/',
+            'whatsapp': 'https://wa.me/212694487224',
+            'instagram': 'https://instagram.com/fay55al'
+        }
+
+        return jsonify({
+            'contact_info': contact_info,
+            'social': social
+        }), 200
+
+    except Exception as e:
+        return jsonify({'error': f'Server error: {str(e)}'}), 500
+
+
+@app.route('/api/social', methods=['PUT'])
+@token_required(roles=['admin'])
+def update_social_links(current_user):
+    try:
+        data = request.json
+        collections['settings'].update_one(
+            {},
+            {'$set': {'social': data}},
+            upsert=True
+        )
+        return jsonify({'message': 'Social links updated'}), 200
+    except Exception as e:
+        return jsonify({'message': f'Error updating social links: {str(e)}'}), 500
 
 # ========== PUBLIC API ========== #
 @app.route('/api/public/portfolio', methods=['GET'])

@@ -131,3 +131,27 @@ button:focus {
   outline-offset: 2px;
 }
 
+/* src/index.css */
+@font-face {
+  font-family: 'Komigo';
+  src: url('../public/fonts/Komigo3D-Regular.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: 'Comikax';
+  src: url('../public/fonts/KOMIKAX_.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+}
+
+/* Optional: Add fallback fonts */
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}

@@ -8,7 +8,7 @@ import {
   FiBriefcase,
   FiBook,
   FiAward,
-  FiEdit,
+  FiMail, // Added for Messages
   FiChevronLeft,
   FiChevronRight,
   FiMenu,
@@ -43,7 +43,7 @@ const Sidebar = () => {
     { path: '/admin/experience', icon: <FiBriefcase />, name: 'Experience' },
     { path: '/admin/education', icon: <FiBook />, name: 'Education' },
     { path: '/admin/certificates', icon: <FiAward />, name: 'Certificates' },
-    { path: '/admin/blog', icon: <FiEdit />, name: 'Blog' },
+    { path: '/admin/messages', icon: <FiMail />, name: 'Messages' }, // Added Messages
   ];
 
   const getNavItemClass = (isActive) => {
